@@ -1,0 +1,6 @@
+# Reuse an existing PyTorch environment; these are the demo's only dependencies.
+# Reference PyTorch version: 2.5.1 (environment.yaml).
+torch>=2.5.1
+numpy>=1.24,<3
+einops==0.8.1
+Pillow>=9

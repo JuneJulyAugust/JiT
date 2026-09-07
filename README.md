@@ -100,6 +100,9 @@ main_jit.py \
 
 ### Evaluation
 
+For a dataset-free JiT-B demo, shared `.venv` setup, checkpoint downloads,
+and full FID/IS commands, see [README_EVALUATION.md](README_EVALUATION.md).
+
 PyTorch pre-trained models are available [here](https://www.dropbox.com/scl/fo/3ken1avtsd81ip67b9qpi/AK218ZNvXKSv74igVvht4PQ?rlkey=14gjrblmljewpl6ygxzlr3njm&st=ffkl77al&dl=0).
 
 Evaluate pre-trained JiT-B:
