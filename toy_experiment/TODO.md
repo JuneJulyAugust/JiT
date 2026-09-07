@@ -8,7 +8,7 @@ body works. No numerical tests are secretly completed or skipped on your behalf.
 ## 0. Orientation (working infrastructure)
 
 - [ ] Read DESIGN.md, paper Section 3.3/Table 1, and the JiT reference mapping.
-- [ ] Run the editable install, `jit-toy --help`, `plan --suite`, and infrastructure tests from README.md.
+- [ ] Activate with `source .venv/bin/activate` from the repository root, then run the editable install, `jit-toy --help`, `plan --suite`, and infrastructure tests from README.md.
 - [ ] Draw [B,D], [B,1], and [D,2] on paper; derive every matrix-product output shape.
 
 ## 1. Data operations — `data.py`

@@ -165,7 +165,10 @@ their traceback. `plan --suite` is safe to run before any tensor exercises.
 ## Configuration, artifacts, and logging
 
 The independent `jit-toy` distribution uses `src/jit_toy`, a `pyproject.toml`,
-and the root's existing `.venv`. Required dependencies: torch, Click, Loguru;
+and the root's existing `.venv`. Run `source .venv/bin/activate` from the repository
+root before `pip install --no-build-isolation -e ./toy_experiment`; subsequent
+commands use `python`, `pip`, and `jit-toy` directly. Activate once per shell
+session. Required dependencies: torch, Click, Loguru;
 matplotlib is optional for plotting. JSON configs avoid requiring a TOML reader
 on Python 3.9. The baseline JSON lists every field; the smoke JSON overrides
 only a few settings. No environment is created inside this subdirectory.

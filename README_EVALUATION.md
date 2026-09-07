@@ -12,7 +12,8 @@
   and `model_ema2`. Locally calculated SHA-256 (not an author-published checksum):
   `4ebcf24698748548d13bef1b4c3b26c72c6ec2bc633002b3f558697920cb2695`.
 - Syntax and four CLI tests passed. Two tensor tests were skipped because PyTorch
-  is missing. Run all tests with `.venv/bin/python -B -m unittest discover -s tests -v`.
+  is missing. After activating `.venv` as shown below, run all tests with
+  `python -B -m unittest discover -s tests -v`.
 - The demo was attempted and stopped at `ModuleNotFoundError: No module named
   'torch'`. **No sample images or FID/IS scores have been produced yet.**
 
@@ -31,18 +32,23 @@ This is generative evaluation, not ImageNet classification accuracy.
 ## 1. Reuse your Python environment
 
 Run all commands from the repository root. An existing `.venv` may be a symlink;
-do not run `python -m venv .venv` over it. Check its actual interpreter first:
+do not run `python -m venv .venv` over it. Activate it before installing packages
+or running Python commands, then check its actual interpreter:
 
 ```bash
 ls -ld .venv
-.venv/bin/python -c "import sys, torch; print(sys.executable); print(sys.version); print(torch.__version__); print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available())"
+source .venv/bin/activate
+python -c "import sys, torch; print(sys.executable); print(sys.version); print(torch.__version__); print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available())"
 ```
+
+Repeat `source .venv/bin/activate` once per new shell session. The commands below
+use `python`, `pip`, `torchrun`, and `tensorboard` from that activated environment.
 
 The small demo only needs PyTorch, NumPy, einops, and Pillow. If dependencies are
 missing, first confirm this is the environment you want to modify, then:
 
 ```bash
-.venv/bin/python -m pip install -r requirements-demo.txt
+pip install -r requirements-demo.txt
 ```
 
 This can install PyTorch if it is absent; it does not create another environment.
@@ -84,7 +90,7 @@ Start with one image, using the pretrained model's first EMA weights and the
 published JiT-B guidance settings (CFG 3.0, interval 0.1–1.0, 50 Heun steps):
 
 ```bash
-.venv/bin/python sample_jit.py \
+python sample_jit.py \
   --checkpoint checkpoints/jit-b-16/checkpoint-last.pth \
   --model JiT-B/16 --device auto \
   --class-ids 207 --steps 50 --seed 0 \
@@ -118,12 +124,14 @@ setting up an existing Python 3.10–3.12 virtual environment manually, a compat
 installation recipe is below (it changes packages in that environment):
 
 ```bash
-# Linux/NVIDIA only; skip if a suitable torch/torchvision pair is already installed.
-.venv/bin/python -m pip install torch==2.5.1 torchvision==0.20.1 \
+# On the Linux/NVIDIA machine, activate its existing environment first.
+source .venv/bin/activate
+# Skip if a suitable torch/torchvision pair is already installed.
+pip install torch==2.5.1 torchvision==0.20.1 \
   --index-url https://download.pytorch.org/whl/cu124
-.venv/bin/python -m pip install numpy==1.26.4 scipy==1.11.4 \
+pip install numpy==1.26.4 scipy==1.11.4 \
   opencv-python==4.11.0.86 timm==0.9.12 tensorboard==2.18.0 einops==0.8.1
-.venv/bin/python -m pip install 'git+https://github.com/LTH14/torch-fidelity.git@master'
+pip install 'git+https://github.com/LTH14/torch-fidelity.git@master'
 ```
 
 The non-PyTorch pins above accommodate newer Python versions; they are not an
@@ -135,7 +143,7 @@ use; these are separate from the JiT checkpoint and are cached by PyTorch.
 One-GPU command (start with a conservative generation batch size):
 
 ```bash
-.venv/bin/torchrun --standalone --nnodes=1 --nproc_per_node=1 \
+torchrun --standalone --nnodes=1 --nproc_per_node=1 \
   main_jit.py \
   --model JiT-B/16 --img_size 256 --noise_scale 1.0 \
   --gen_bsz 8 --num_images 50000 \
@@ -162,7 +170,7 @@ It needs temporary disk space for 50,000 PNGs; raw RGB at 256 × 256 is about
 The small demo above keeps its images. To view metric logs:
 
 ```bash
-.venv/bin/tensorboard --logdir outputs/jit-b-fid50k
+tensorboard --logdir outputs/jit-b-fid50k
 ```
 
 ## 5. Download ImageNet only if training or rebuilding references
@@ -205,7 +213,7 @@ data/imagenet/
 If you really need a resized reference image folder:
 
 ```bash
-.venv/bin/python prepare_ref.py \
+python prepare_ref.py \
   --data_path data/imagenet --img_size 256 \
   --output_path data/imagenet-train-256
 ```
@@ -216,8 +224,9 @@ the ImageNet download for pretrained evaluation.
 
 ## Troubleshooting
 
-- `No module named torch`: check `.venv/bin/python` and the symlink target. An
-  activated shell or another project's environment may use a different Python.
+- `No module named torch`: run `source .venv/bin/activate` from the repository
+  root, then check `python -c "import sys; print(sys.executable)"` and the `.venv`
+  symlink target. Another project's environment may select a different Python.
 - CUDA/NCCL errors on Mac: use `sample_jit.py --device mps` (or `cpu`), not the
   original `torchrun main_jit.py` evaluator.
 - Out of memory: use the batch-one demo, or lower `--gen_bsz` for CUDA metrics.

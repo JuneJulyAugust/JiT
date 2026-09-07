@@ -20,18 +20,22 @@ shared `/Users/fang/.venv` (Python 3.9); this project does not create another on
 `pyproject.toml` manages this independent distribution, installed as `jit_toy`.
 
 ```bash
+source .venv/bin/activate
 # Modern pip supports editable pyproject packages. No torch upgrade requested.
-.venv/bin/python -m pip install 'pip>=23,<26' 'setuptools>=64'
-.venv/bin/python -m pip install --no-build-isolation -e ./toy_experiment
+pip install 'pip>=23,<26' 'setuptools>=64'
+pip install --no-build-isolation -e ./toy_experiment
 
-.venv/bin/python -m jit_toy --help
-.venv/bin/jit-toy plan --config toy_experiment/configs/smoke.json
-.venv/bin/jit-toy plan --config toy_experiment/configs/baseline.json --suite
-.venv/bin/python -m unittest discover -s toy_experiment/tests -v
+python -m jit_toy --help
+jit-toy plan --config toy_experiment/configs/smoke.json
+jit-toy plan --config toy_experiment/configs/baseline.json --suite
+python -m unittest discover -s toy_experiment/tests -v
 ```
 
-Use explicit `.venv/bin/...` paths to select the shared environment. Editable
-installation makes source edits immediately visible. Do not run `uv sync` here:
+Activate the environment before installing so `pip`, `python`, and `jit-toy`
+use the shared `.venv`. Repeat `source .venv/bin/activate` once in each new shell
+session; no reactivation is needed after installation. The packaging tools above
+are already installed locally, so their install command is only needed for setup.
+Editable installation makes source edits immediately visible. Do not run `uv sync` here:
 there is no separate project environment or lockfile. Dependency lower bounds
 allow the existing PyTorch installation to be reused. The smoke config is for
 eventual wiring checks, not meaningful model quality; even it cannot train yet.
@@ -43,17 +47,17 @@ All paths are relative to the current working directory, not the config's parent
 
 ```bash
 # Working now: validate/inspect the design and write source-located logs.
-.venv/bin/jit-toy --log-file outputs/toy/plan.log plan --suite
+jit-toy --log-file outputs/toy/plan.log plan --suite
 
 # After completing the exercises below, these become executable workflows.
-.venv/bin/jit-toy --log-file outputs/toy/smoke.log train \
+jit-toy --log-file outputs/toy/smoke.log train \
   --config toy_experiment/configs/smoke.json --output outputs/toy/smoke
-.venv/bin/jit-toy sample --checkpoint outputs/toy/smoke/checkpoint.pt \
+jit-toy sample --checkpoint outputs/toy/smoke/checkpoint.pt \
   --output outputs/toy/smoke/samples.pt --device cpu
 
 # Install plotting only when you reach V02; this still uses the same .venv.
-.venv/bin/python -m pip install --no-build-isolation -e './toy_experiment[plot]'
-.venv/bin/jit-toy plot --samples outputs/toy/smoke/samples.pt \
+pip install --no-build-isolation -e './toy_experiment[plot]'
+jit-toy plot --samples outputs/toy/smoke/samples.pt \
   --output outputs/toy/smoke/comparison.png
 ```
 
