@@ -113,6 +113,10 @@ def get_args_parser():
 
 
 def main(args):
+    checkpoint_path = os.path.join(args.resume, "checkpoint-last.pth") if args.resume else None
+    if args.evaluate_gen and (not checkpoint_path or not os.path.isfile(checkpoint_path)):
+        raise FileNotFoundError('--evaluate_gen requires --resume DIR containing checkpoint-last.pth')
+
     misc.init_distributed_mode(args)
     print('Job directory:', os.path.dirname(os.path.realpath(__file__)))
     print("Arguments:\n{}".format(args).replace(', ', ',\n'))
@@ -136,28 +140,29 @@ def main(args):
     else:
         log_writer = None
 
-    # Data augmentation transforms
-    transform_train = transforms.Compose([
-        transforms.Lambda(lambda img: center_crop_arr(img, args.img_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.PILToTensor()
-    ])
+    # Generation evaluation uses the bundled FID statistics, not training images.
+    if not args.evaluate_gen:
+        transform_train = transforms.Compose([
+            transforms.Lambda(lambda img: center_crop_arr(img, args.img_size)),
+            transforms.RandomHorizontalFlip(),
+            transforms.PILToTensor()
+        ])
 
-    dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
-    print(dataset_train)
+        dataset_train = datasets.ImageFolder(os.path.join(args.data_path, 'train'), transform=transform_train)
+        print(dataset_train)
 
-    sampler_train = torch.utils.data.DistributedSampler(
-        dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
-    )
-    print("Sampler_train =", sampler_train)
+        sampler_train = torch.utils.data.DistributedSampler(
+            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        )
+        print("Sampler_train =", sampler_train)
 
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True
-    )
+        data_loader_train = torch.utils.data.DataLoader(
+            dataset_train, sampler=sampler_train,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True
+        )
 
     torch._dynamo.config.cache_size_limit = 128
     torch._dynamo.config.optimize_ddp = False
@@ -188,7 +193,6 @@ def main(args):
     print(optimizer)
 
     # Resume from checkpoint if provided
-    checkpoint_path = os.path.join(args.resume, "checkpoint-last.pth") if args.resume else None
     if checkpoint_path and os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
         model_without_ddp.load_state_dict(checkpoint['model'])

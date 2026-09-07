@@ -94,9 +94,9 @@ class LabelEmbedder(nn.Module):
 def scaled_dot_product_attention(query, key, value, dropout_p=0.0) -> torch.Tensor:
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / math.sqrt(query.size(-1))
-    attn_bias = torch.zeros(query.size(0), 1, L, S, dtype=query.dtype).cuda()
+    attn_bias = torch.zeros(query.size(0), 1, L, S, dtype=query.dtype, device=query.device)
 
-    with torch.cuda.amp.autocast(enabled=False):
+    with torch.autocast(device_type=query.device.type, enabled=False):
         attn_weight = query.float() @ key.float().transpose(-2, -1) * scale_factor
     attn_weight += attn_bias
     attn_weight = torch.softmax(attn_weight, dim=-1)
