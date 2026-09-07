@@ -1,0 +1,10 @@
+{
+  "observed_dim": 2,
+  "prediction": "x",
+  "train_size": 128,
+  "eval_size": 64,
+  "batch_size": 32,
+  "train_steps": 10,
+  "log_every": 1,
+  "sampling_steps": 5
+}
