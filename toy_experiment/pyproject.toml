@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jit-toy"
+version = "0.1.0"
+description = "Guided PyTorch exercises for JiT Section 3.3"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.5.1",
+    "click>=8.1,<9",
+    "loguru>=0.7,<1",
+]
+
+[project.optional-dependencies]
+plot = ["matplotlib>=3.7,<4"]
+
+[project.scripts]
+jit-toy = "jit_toy.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
