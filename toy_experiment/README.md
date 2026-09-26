@@ -1,82 +1,59 @@
 # JiT toy experiment: guided implementation
 
-A practice subpackage for Section 3.3 of *Back to Basics: Let Denoising
-Generative Models Denoise*. Start with [DESIGN.md](DESIGN.md), then work through
-[TODO.md](TODO.md) in order. The scaffold follows the existing JiT code's flow
-formulation, loss reduction, optimizer settings, and update/ODE conventions;
-the design explains the toy-specific adaptations.
+This package provides a working command-line interface and unfinished PyTorch exercises for Section 3.3 of *Back to Basics: Let Denoising Generative Models Denoise*. You can inspect configurations now. Data generation, the model, training, sampling, and evaluation remain yours to implement; the package has no experimental results yet.
 
-**Implemented:** packaging, validated configuration, Click commands, Loguru
-console/file logging with source paths and line numbers, and a 12-case plan.
-**Left for you:** every data tensor operation, the whole model, flow math,
-training, sampling, evaluation, and experiment/checkpoint integration.
-Each unfinished method raises `ExerciseNotImplemented` with its TODO ID.
-There are no supplied model solutions, fake training runs, or generated results.
+Start with [the design](DESIGN.md) for the equations and their connection to the existing JiT code. Follow [the ordered TODO list](TODO.md) to implement one exercise at a time. Each stub raises `ExerciseNotImplemented` with a matching exercise ID. Comments give tensor shapes, relevant operations, pitfalls, and checks without supplying the numerical bodies.
 
-## Use the existing `.venv`
+## Use the existing environment
 
-Run commands from the **repository root**. Its `.venv` currently points to the
-shared `/Users/fang/.venv` (Python 3.9); this project does not create another one.
-`pyproject.toml` manages this independent distribution, installed as `jit_toy`.
+Run these commands from the repository root. Activate the existing `.venv` before installing, once per shell session. The package supports Python 3.9 and later; it does not create a second environment.
 
 ```bash
 source .venv/bin/activate
-# Modern pip supports editable pyproject packages. No torch upgrade requested.
-pip install 'pip>=23,<26' 'setuptools>=64'
 pip install --no-build-isolation -e ./toy_experiment
 
-python -m jit_toy --help
+jit-toy --help
 jit-toy plan --config toy_experiment/configs/smoke.json
 jit-toy plan --config toy_experiment/configs/baseline.json --suite
 python -m unittest discover -s toy_experiment/tests -v
 ```
 
-Activate the environment before installing so `pip`, `python`, and `jit-toy`
-use the shared `.venv`. Repeat `source .venv/bin/activate` once in each new shell
-session; no reactivation is needed after installation. The packaging tools above
-are already installed locally, so their install command is only needed for setup.
-Editable installation makes source edits immediately visible. Do not run `uv sync` here:
-there is no separate project environment or lockfile. Dependency lower bounds
-allow the existing PyTorch installation to be reused. The smoke config is for
-eventual wiring checks, not meaningful model quality; even it cannot train yet.
+Editable installation makes source edits visible without reinstalling. `--no-build-isolation` uses the build tools already in the environment. If those tools need updating, run `pip install 'pip>=23,<26' 'setuptools>=64'` in the activated shell before installing this package. The required dependencies are PyTorch, Click, and Loguru; plotting has an optional dependency on matplotlib. No additional dependency or environment manager is needed.
 
-`plan` emits one JSON object, or a 12-element JSON array with `--suite`, to stdout.
-Logs go to stderr. A suite is a plan only, not an automatic training launcher.
-JSON configs may contain partial overrides; unknown keys and invalid values fail.
-All paths are relative to the current working directory, not the config's parent.
+## Inspect one run before implementing it
+
+`plan` validates partial JSON overrides and prints a resolved configuration object. `plan --suite` prints an array of 12 configurations: four observed dimensions times three prediction types. It plans the comparison; it does not train the models. Both commands write JSON to standard output and logs to standard error. All paths are relative to the current working directory.
 
 ```bash
-# Working now: validate/inspect the design and write source-located logs.
 jit-toy --log-file outputs/toy/plan.log plan --suite
+```
 
-# After completing the exercises below, these become executable workflows.
+Each log message includes its timestamp, severity, module, function, source path, and line number. Global logging options precede the command. The [Click quickstart](https://click.palletsprojects.com/en/stable/quickstart/) and [Loguru logger reference](https://loguru.readthedocs.io/en/stable/api/logger.html) describe the two libraries used at this boundary.
+
+## Run the experiment after completing the exercises
+
+These commands are the intended workflow. They currently exit nonzero at an exercise stub and do not create training or sampling artifacts.
+
+```bash
 jit-toy --log-file outputs/toy/smoke.log train \
   --config toy_experiment/configs/smoke.json --output outputs/toy/smoke
 jit-toy sample --checkpoint outputs/toy/smoke/checkpoint.pt \
   --output outputs/toy/smoke/samples.pt --device cpu
 
-# Install plotting only when you reach V02; this still uses the same .venv.
+# Install plotting when you reach V02, in the same activated environment.
 pip install --no-build-isolation -e './toy_experiment[plot]'
 jit-toy plot --samples outputs/toy/smoke/samples.pt \
   --output outputs/toy/smoke/comparison.png
 ```
 
-Put global logging options before the command. Keep a training log outside the
-new run directory, since opening a log creates its parent and `train` refuses
-existing run directories. Numerical commands exit nonzero with an exercise ID
-until completed. No checkpoint or sample is produced by a placeholder.
+Keep the training log outside the new run directory: opening a log creates its parent, while `train` rejects an existing run directory. Sampling and plotting also reject existing output files. The smoke configuration requests ten updates to check the eventual workflow; it is not a model-quality experiment.
 
-## Find your next exercise
+## Complete the next exercise
+
+Find the stubs with:
 
 ```bash
 rg -n 'ExerciseNotImplemented|[DMFTSVE][0-9]{2}' toy_experiment/src/jit_toy
 ```
 
-The comments contain shapes, equations, relevant PyTorch operations, pitfalls,
-acceptance criteria, and references to the corresponding full JiT functions.
-Replace the raise only after implementing that exercise. Write numerical tests
-yourself as you progress; the supplied tests check the working CLI/config/logging
-infrastructure and intentionally make no claim about numerical correctness.
-
-Useful API references: [Click quickstart](https://click.palletsprojects.com/en/stable/quickstart/)
-and [Loguru logger API](https://loguru.readthedocs.io/en/stable/api/logger.html).
+The supplied tests cover configuration, command dispatch, error handling, and logging. They do not establish numerical correctness. Write the shape, algebra, and gradient checks in [TODO.md](TODO.md) as you implement each exercise. Begin with **D01, `sample_spiral`**: return finite float32 points of shape `[N,2]` with reproducible draws from the supplied generator.

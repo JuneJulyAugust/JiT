@@ -5,27 +5,44 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor
 
-from .config import ExperimentConfig
 from .exercises import ExerciseNotImplemented
 
 
 @dataclass(frozen=True)
 class FlowBatch:
+    """One fixed training example batch; callers must not mutate its tensors.
+
+    Frozen fields prevent rebinding, but do not make tensor storage immutable.
+    Keeping the batch explicit lets you test an update without drawing noise.
+    """
+
     z: Tensor  # [B,D]
     t: Tensor  # [B,1], broadcasts only across D
     target_velocity: Tensor  # [B,D]
 
 
-def sample_times(batch_size: int, config: ExperimentConfig, *, generator: torch.Generator) -> Tensor:
+def sample_times(
+    batch_size: int,
+    *,
+    mean: float,
+    standard_deviation: float,
+    margin: float,
+    generator: torch.Generator,
+) -> Tensor:
     """F01: CPU float32 logit-normal times [B,1].
 
     Practice randn, sigmoid, affine transforms, clamp, broadcasting.
     Reference: denoiser.py::Denoiser.sample_t and its forward time reshape.
-    The normal variable has mean time_mean and std time_std; sigmoid maps it
-    to time. Restrict to [time_eps, 1-time_eps] for finite denominators.
+    The normal variable has the supplied mean and standard_deviation;
+    sigmoid maps it to time. Restrict to [margin, 1-margin] for finite
+    denominators. The caller passes config.time_mean, time_std and time_eps;
+    this function does not need the rest of the experiment configuration.
+    Contract: batch_size>0, finite mean, standard_deviation>0 and finite,
+    and 0<margin<0.5. ExperimentConfig validates these settings at the boundary.
     Clamping is an explicit practical change to the ideal time distribution.
     Return a column, never [B]: [B] can silently broadcast along D when B=D.
-    Use a separate flow RNG (seed+3); do not reseed on every batch.
+    Consume the supplied random generator; its seed and lifetime belong to
+    the caller. Do not create or reseed a generator inside this function.
     """
     raise ExerciseNotImplemented("F01", "sample logit-normal time columns")
 

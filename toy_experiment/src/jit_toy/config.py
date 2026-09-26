@@ -8,6 +8,7 @@ from typing import Optional
 
 PREDICTIONS = ("x", "eps", "v")
 PAPER_DIMENSIONS = (2, 8, 16, 512)
+DEVICES = ("cpu", "mps", "cuda")
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class ExperimentConfig:
                 raise ValueError(f"{name} must be a positive integer")
         for name in ("seed", "projection_seed"):
             value = getattr(self, name)
+            # Reserve room for seed+1 through seed+3 within signed 64-bit seeds.
             if type(value) is not int or not 0 <= value < 2**63 - 4:
                 raise ValueError(f"{name} must be an integer in [0, 2**63 - 4)")
         for name in ("spiral_turns", "spiral_radius", "learning_rate", "time_std", "time_eps"):
@@ -66,7 +68,7 @@ class ExperimentConfig:
             raise ValueError("linear_layers must be at least 2")
         for name, choices in (
             ("prediction", PREDICTIONS), ("dataset", ("spiral",)),
-            ("device", ("cpu", "mps", "cuda")), ("solver", ("euler", "heun")),
+            ("device", DEVICES), ("solver", ("euler", "heun")),
         ):
             if getattr(self, name) not in choices:
                 raise ValueError(f"{name} must be one of {choices}")

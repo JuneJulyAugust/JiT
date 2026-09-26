@@ -12,7 +12,7 @@ def run_training(config: ExperimentConfig, output: Path) -> None:
     After D/M/F/T exercises pass:
     Reference main_jit.py::main for data/model/device/optimizer lifecycle and
     util/misc.py::save_model for state_dict checkpointing. This smaller schema
-    is independent of image-model checkpoints and deliberately excludes EMA.
+    is independent of image-model checkpoints and excludes moving averages.
     - Validate CPU/MPS/CUDA availability; seed model initialization with seed.
       Use float32 baseline. Fail clearly for unavailable requested devices.
     - Create output with exist_ok=False so old runs are never overwritten.
@@ -20,13 +20,22 @@ def run_training(config: ExperimentConfig, output: Path) -> None:
       versions and device). A failed run may retain partial logs, but must
       not contain a success marker or a checkpoint presented as complete.
     - build_data(config); make_loader with its independent seed+2 Generator.
-    - Construct ToyMLP(D,H,L), move it to requested device, call train().
+    - Construct ToyMLP(D,H,L), move it to the requested device, then call
+      build_optimizer(model.parameters(), config.learning_rate). Create the
+      flow generator once with seed+3 and pass it to train().
+    - Open metrics.jsonl exclusively (mode='x') with a context manager. Supply
+      train() with an on_metrics(step, metrics) callback that writes one JSON
+      object per line at log_every and the final step. Log those same scalar
+      metrics with a direct logger.info call, preserving its source location.
+      This function owns file lifetime; training.py never opens a file or
+      configures logging. Let write errors propagate instead of reporting
+      success with missing metrics. Verify JSON lines parse in the E01 check.
     - Save checkpoint.pt containing ONLY tensors and primitive containers:
       schema_version=1, config dict, model_state, projection, reference_intrinsic.
       Save model tensors on CPU; keep the original trained model on its device.
       Practice state_dict, detach/cpu, torch.save; use a temp path then rename.
     - Log completion only after save succeeds. Checkpoint is for inference,
-      NOT training resume; supporting resume requires optimizer and RNG states.
+      NOT training resume; resume needs optimizer and random-generator states.
     P and intrinsic reference are metadata; neither is passed to the model.
     """
     raise ExerciseNotImplemented("E01", "wire the training experiment and checkpoint")

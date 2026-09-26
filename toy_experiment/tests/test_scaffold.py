@@ -78,6 +78,14 @@ class CLITests(unittest.TestCase):
         self.assertEqual(len(json.loads(result.stdout)), 12)
         self.assertRegex(result.stderr, r"cli\.py:\d+\) \| Validated 12")
 
+    def test_single_plan_preserves_documented_defaults(self):
+        result = subprocess.run([sys.executable, "-m", "jit_toy", "plan"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        baseline = Path(__file__).resolve().parents[1] / "configs/baseline.json"
+        self.assertEqual(json.loads(result.stdout), json.loads(baseline.read_text()))
+        self.assertIn("Validated 1 configuration(s)", result.stderr)
+
     def test_bad_config_produces_user_facing_error(self):
         with self.runner.isolated_filesystem():
             Path("bad.json").write_text('{"observed_dim":0}')
@@ -96,6 +104,32 @@ class CLITests(unittest.TestCase):
             self.assertIn("E01", result.output)
             self.assertIn("TODO.md", result.output)
             self.assertFalse(Path("new-run").exists())
+
+    def test_unexpected_training_error_is_not_translated(self):
+        error = RuntimeError("unexpected training error")
+        with self.runner.isolated_filesystem(), patch(
+            "jit_toy.experiment.run_training", side_effect=error
+        ):
+            result = self.runner.invoke(main, ["train", "--output", "new-run"])
+            self.assertIs(result.exception, error)
+            self.assertNotEqual(result.exit_code, 0)
+
+    def test_sampling_forwards_the_requested_device(self):
+        with self.runner.isolated_filesystem(), patch("jit_toy.experiment.run_sampling") as sample:
+            Path("input.pt").touch()
+            for device in ("cpu", "mps", "cuda"):
+                with self.subTest(device=device):
+                    result = self.runner.invoke(main, [
+                        "sample", "--checkpoint", "input.pt", "--output", "output.pt", "--device", device,
+                    ])
+                    self.assertEqual(result.exit_code, 0, result.output)
+                    sample.assert_called_with(Path("input.pt"), Path("output.pt"), device)
+            sample.reset_mock()
+            result = self.runner.invoke(main, [
+                "sample", "--checkpoint", "input.pt", "--output", "output.pt", "--device", "auto",
+            ])
+            self.assertEqual(result.exit_code, 2)
+            sample.assert_not_called()
 
     def test_existing_training_output_is_preserved(self):
         with self.runner.isolated_filesystem():

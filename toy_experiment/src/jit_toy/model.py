@@ -6,7 +6,7 @@ from .exercises import ExerciseNotImplemented
 
 
 class ToyMLP(nn.Module):
-    """A direct-output network, independent of x/eps/v interpretation.
+    """A multilayer perceptron (MLP), independent of x/eps/v interpretation.
 
     Contract: forward(z [B,D], t [B,1]) -> raw prediction [B,D].
     It must not know P, intrinsic points, or the prediction-to-velocity formula.

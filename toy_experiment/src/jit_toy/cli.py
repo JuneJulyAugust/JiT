@@ -9,7 +9,7 @@ import click
 from loguru import logger
 
 from . import __version__
-from .config import experiment_matrix, load_config
+from .config import DEVICES, ExperimentConfig, experiment_matrix, load_config
 from .exercises import ExerciseNotImplemented
 from .logging import configure_logging
 
@@ -25,7 +25,7 @@ def exercise_errors(function):
     return wrapped
 
 
-def read_config(path: Optional[Path]):
+def read_config(path: Optional[Path]) -> ExperimentConfig:
     try:
         return load_config(path)
     except (ValueError, OSError) as error:
@@ -47,8 +47,9 @@ def main(log_level: str, log_file: Optional[Path]) -> None:
 def plan(config: Optional[Path], suite: bool) -> None:
     """Print resolved JSON configuration; no tensors or run artifacts are created."""
     base = read_config(config)
-    result = [case.to_dict() for case in experiment_matrix(base)] if suite else base.to_dict()
-    logger.info("Validated {} configuration(s); numerical exercises remain to be implemented", 12 if suite else 1)
+    cases = experiment_matrix(base) if suite else [base]
+    result = [case.to_dict() for case in cases] if suite else base.to_dict()
+    logger.info("Validated {} configuration(s); numerical exercises remain to be implemented", len(cases))
     click.echo(json.dumps(result, indent=2, allow_nan=False))
 
 
@@ -69,7 +70,7 @@ def train(config: Optional[Path], output: Path) -> None:
 @main.command()
 @click.option("--checkpoint", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--output", required=True, type=click.Path(dir_okay=False, path_type=Path))
-@click.option("--device", type=click.Choice(["cpu", "mps", "cuda"]), default="cpu", show_default=True)
+@click.option("--device", type=click.Choice(DEVICES), default="cpu", show_default=True)
 @exercise_errors
 def sample(checkpoint: Path, output: Path, device: str) -> None:
     """Generate points from a checkpoint after S/E exercises (currently a stub)."""
