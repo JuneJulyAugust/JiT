@@ -1,185 +1,171 @@
-# Section 3.3 toy experiment design
+# Design for the Section 3.3 toy experiment
 
-The scaffold can validate and print the 12 configurations needed for the toy comparison. Its numerical methods are unfinished exercises, so it cannot yet establish whether clean-data prediction outperforms noise or velocity prediction. This design preserves the existing JiT flow equations and update conventions while making the toy-specific assumptions explicit.
+The implemented scaffold establishes configuration and command behavior only. It does not yet test the paper's claim. The numerical implementation must compare three direct prediction targets under the same data, projection, network capacity, loss space, random streams, and training budget. A difference observed after those controls are fixed can be attributed to prediction target more credibly; a difference from unmatched runs cannot.
 
 ## Contents
 
-- [1. What runs today](#1-what-runs-today)
-- [2. One observed sample](#2-one-observed-sample)
-- [3. Data ownership and tensor shapes](#3-data-ownership-and-tensor-shapes)
-- [4. From a direct prediction to a velocity field](#4-from-a-direct-prediction-to-a-velocity-field)
-- [5. Training boundaries](#5-training-boundaries)
-- [6. Sampling and saved artifacts](#6-sampling-and-saved-artifacts)
-- [7. Relationship to the full JiT implementation](#7-relationship-to-the-full-jit-implementation)
-- [8. Verification and the next exercise](#8-verification-and-the-next-exercise)
+- [1. Experiment contract and evidence boundary](#1-experiment-contract-and-evidence-boundary)
+- [2. One sample through the data path](#2-one-sample-through-the-data-path)
+- [3. One sample through the flow equations](#3-one-sample-through-the-flow-equations)
+- [4. One training update in execution order](#4-one-training-update-in-execution-order)
+- [5. Sampling and evaluation](#5-sampling-and-evaluation)
+- [6. Relationship to the full JiT code](#6-relationship-to-the-full-jit-code)
+- [7. Configuration and reproducibility](#7-configuration-and-reproducibility)
+- [8. Verification order and next action](#8-verification-order-and-next-action)
 
-## 1. What runs today
+## 1. Experiment contract and evidence boundary
 
-After activating the root's `.venv` and installing the package as described in [README.md](README.md), run:
+Section 3.3 and Figure 2 of the [paper](../docs/Back%20to%20Basics-%20Let%20Denoising%20Generative%20Models%20Denoise.pdf) define the experiment at a high level. Two-dimensional data is embedded into an observed space by a fixed random matrix with orthonormal columns. A five-layer rectified linear unit network with hidden width 256 receives only noisy observed data and time. Separate runs directly predict clean data, noise, or velocity. All three runs are optimized in velocity space. The paper evaluates observed dimensions 2, 8, 16, and 512 and projects generated samples back to two dimensions for Figure 2.
 
-```bash
-jit-toy plan --config toy_experiment/configs/smoke.json
-```
+The paper reports that clean-data prediction remains effective as the observed dimension increases while noise and velocity prediction deteriorate. That statement is the paper's observation. This package has not trained the models, generated samples, or measured that behavior.
 
-Click reads the configuration path, `load_config` validates its JSON overrides, and `plan` writes the resolved settings to standard output. Loguru writes the validation message to standard error with its source location. This path does not import PyTorch or create experiment artifacts. `--log-file` optionally creates a log file; that is a separate command-line effect.
+Section 3.3 does not specify the exact spiral distribution, training-set size, optimizer, learning rate, number of updates, scalar-time encoding, or endpoint treatment for all three prediction targets. This design must choose those details to make the exercise executable. They are implementation policy, not recovered facts about the authors' run.
 
-A training request reaches a different boundary. The relevant execution slice in [cli.py](src/jit_toy/cli.py) is:
+The controlled comparison is:
 
-```python
-resolved = read_config(config)
-if output.exists():
-    raise click.ClickException(f"Output already exists: {output}; choose a new run directory")
-from .experiment import run_training
-logger.info("Requested training D={} prediction={} output={}", resolved.observed_dim, resolved.prediction, output)
-run_training(resolved, output)
-```
-
-`run_training` currently raises `ExerciseNotImplemented` for E01. The command adapter converts that specific exception into a nonzero exit and a TODO reference. It does not report completion or create a checkpoint. Unexpected programming errors propagate for debugging. This distinction must remain visible while exercises are completed.
-
-The remaining sections specify the intended numerical implementation. They describe contracts and planned checks, not observed model behavior.
-
-## 2. One observed sample
-
-Consider an intrinsic point `[1,0]` and an observed dimension `D=8`. For this example alone, let the first two rows of the embedding matrix `P` form the identity and the other six rows be zero. Then embedding the point gives `[1,0,0,0,0,0,0,0]`. Multiplying that observed row by `P` recovers `[1,0]`. The experiment will use a random orthonormal basis instead of these coordinate axes, but the shape and inverse-on-subspace relationships are the same.
-
-Noise is different: it has eight independently sampled Gaussian coordinates. Restricting noise to the two-dimensional embedded plane would remove the high-dimensional prediction problem. The model receives the noisy eight-dimensional point and time, but never receives `P` or the intrinsic coordinates.
-
-The [paper](../docs/Back%20to%20Basics-%20Let%20Denoising%20Generative%20Models%20Denoise.pdf), arXiv:2511.13720v2, specifies the comparison in Section 3.3 and Figure 2 on pages 4–5. Section 3.1 on page 3 and Table 1 on page 4 give the flow formulation. Each planned run below uses the same type of embedding as this example.
-
-| Quantity | Paper setup |
+| Factor | Fixed or varied |
 | --- | --- |
-| Intrinsic dimension | `d=2` |
-| Observed dimension | `D` in `{2,8,16,512}`; `D=2` is the no-expansion control |
-| Embedding | Fixed random `P [D,2]`, with `P.T @ P = I` |
-| Model | Five-layer multilayer perceptron (MLP), width 256, rectified linear unit (ReLU) hidden activations |
-| Direct network prediction | Clean data `x`, noise `eps`, or velocity `v`, in separate runs |
-| Loss | Velocity-space loss for all three prediction types |
-| Visualization | Generated observed points projected back to two dimensions |
+| Intrinsic dimension | Fixed at `d=2` |
+| Observed dimension | Varied over `D={2,8,16,512}` |
+| Direct prediction | Varied over clean data `x`, noise `epsilon`, and velocity `v` |
+| Projection, intrinsic samples, initial weights, random streams | Fixed across prediction targets at a given `D` |
+| Network | Five Linear layers, four hidden rectified linear unit activations, width 256 |
+| Loss | Fixed velocity-space mean squared error |
+| Training budget and sampler | Fixed across all prediction targets |
 
-Figure 2 reports that clean-data prediction remains effective as the observed dimension grows, while noise and velocity prediction deteriorate. That is the result to investigate, not a result established by this package.
+Figure 2 supplies a qualitative target for comparison, not a test oracle. No test should require clean-data prediction to win. Such a test would encode the expected conclusion instead of checking the implementation.
 
-The figure depicts a spiral. Section 3.3 does not specify its exact sampling density and scale, dataset sizes, training budget, optimizer, toy time-conditioning method, or layer-count convention. The configuration and comments label these as practice choices. They are not an exact reconstruction of the authors' Figure 2 implementation.
+## 2. One sample through the data path
 
-## 3. Data ownership and tensor shapes
-
-Each row is one sample. For a batch `X_hat [N,2]`, embedding is `X_hat @ P.T`, producing `X [N,D]`. Visualization uses `X @ P`, producing `[N,2]`. Because the columns of `P` are orthonormal, the first transformation preserves distances. Do not standardize individual observed coordinates or multiply by a dimension-dependent scale afterward.
-
-The chosen spiral recipe draws `u` uniformly on `[0,1)`, sets angle to `2*pi*turns*u` and radius to `spiral_radius*u`, and converts polar coordinates to Cartesian coordinates. Defaults are two turns and radius two, with no added data jitter. Uniform `u` is not uniform arc length; hold this density fixed across comparisons.
-
-D02 constructs `P` from the thin QR decomposition of a random `[D,2]` Gaussian matrix: the columns of the returned `Q` are orthonormal. Generate `P` once per observed dimension and projection seed, and save the actual tensor. Regenerating it per batch would change the learning problem.
-
-| Value | Shape | Owner and allowed use |
-| --- | --- | --- |
-| Intrinsic points | `[N,2]` | Data construction and evaluation |
-| Projection `P` | `[D,2]` | Data construction, saved metadata, and evaluation |
-| Clean observed batch | `[B,D]` | Dataset and training loop |
-| Gaussian noise | `[B,D]` | Training loop; standard Gaussian in all D dimensions |
-| Time | `[B,1]` | Flow functions and sampler |
-| Noisy batch, raw prediction, velocity | `[B,D]` | Model, loss, and sampler |
-| Loss | Scalar tensor | Training update until backward completes |
-
-Create data tensors on the CPU in float32. Move observed batches, noise, and time to the selected model device in the training loop. `FlowBatch` groups noisy points, time, and target velocity. Its frozen dataclass prevents field reassignment; it does not freeze the tensors' storage. Callers and the training update must treat those input tensors as read-only.
-
-Separate random-generator streams prevent an extra data draw from changing the projection or training noise. Training points use `seed`, held-out points use `seed+1`, shuffling uses `seed+2`, flow draws use `seed+3`, and the projection uses `projection_seed`. Seed model initialization separately with `torch.manual_seed`. Sampling starts a fresh generator at `seed+1`; it must not advance the training generator.
-
-Across the three prediction types at one `D`, hold the projection, intrinsic dataset, initial network weights, random seeds, and training budget fixed. Separate seeded generators isolate mutable state; they do not promise bitwise equality across devices or software versions. Save the actual projection and record the runtime.
-
-## 4. From a direct prediction to a velocity field
-
-For one coordinate, take clean data `x=2`, noise `eps=-1`, and time `t=0.25`. Linear interpolation gives `z=-0.25`; the velocity target is `v=3`. A perfect clean-data output recovers that velocity as `(2-(-0.25))/(1-0.25)=3`. A perfect noise output recovers it as `(-0.25-(-1))/0.25=3`. This illustrates why all three direct prediction types can be compared in one loss space.
-
-For every coordinate, the paper's equations are `z_t=t*x+(1-t)*eps` and `v=x-eps`. Time increases from noise toward data. [flow.py](src/jit_toy/flow.py) owns the following conversions, outside the model:
-
-| Direct prediction | Velocity used for training and sampling |
-| --- | --- |
-| Clean data, `x` | `(raw-z)/(1-t)` |
-| Noise, `eps` | `(z-raw)/t` |
-| Velocity, `v` | `raw` |
-
-The common loss is `mean_B(mean_D((v_pred-v_target)^2))`, matching the feature-mean then batch-mean reduction in `Denoiser.forward`. This equals the paper's expected squared Euclidean norm divided by `D`. The factor changes gradient scale, so keep the reduction fixed across prediction types. Report the optimized value as `loss` and `loss*D` as `loss_sum`; add no further time weighting after conversion.
-
-F01 receives only a batch size, normal mean, normal standard deviation, endpoint margin, and explicit generator. The training loop passes `time_mean`, `time_std`, and `time_eps` from configuration. The normal draw is mapped through a sigmoid, then clamped to `[margin,1-margin]`. Clamping changes the ideal logit-normal distribution near the boundaries and is a deliberate numerical policy.
-
-Defaults `time_mean=-0.8` and `time_std=0.8` come from `main_jit.py`; the toy-specific values are not given in Section 3.3. The margin is `time_eps=0.001`. Conversion callers use this interior interval, so neither `eps` conversion at zero nor `x` conversion at one is evaluated.
-
-JiT computes its target as `(x-z)/(1-t).clamp_min(t_eps)`. In the toy's interior interval, the clamp is inactive in exact arithmetic and this target equals `x-eps`. If changing to JiT's unrestricted sigmoid times, that equivalence no longer holds where its denominator is clamped. Change target and prediction policy together; do not silently combine the two formulations.
-
-## 5. Training boundaries
-
-The five-layer convention is four hidden Linear/ReLU layers followed by one unconstrained Linear output. Concatenating scalar time to the observed vector makes the first input width `D+1`. Hidden width stays 256. This is a toy conditioning choice; full JiT uses sinusoidal time features and adaptive layer normalization.
-
-The model's contract is `forward(z [B,D], t [B,1]) -> raw [B,D]`. It knows neither the projection nor the prediction type. No analytic noise passthrough or full input-output residual may bypass the bottleneck, because that would change the capacity comparison. Begin with PyTorch's Linear initialization; the image Transformer's specialized zero initialization is not required here.
-
-The flow of one eventual update answers where randomness, mutation, and file effects belong:
+Take the intrinsic row vector `x_hat=[1,0]` and let `D=3`. For this example, use the column-orthonormal projection
 
 ```text
-experiment.py: create model, optimizer, generator, and metric-file callback
-    -> training.py: fetch clean batch; draw time/noise; construct FlowBatch
-        -> model.py: predict raw output
-        -> flow.py: convert to velocity and reduce loss
-        -> training.py: backward; optimizer step; return scalar metrics
-    -> experiment.py callback: write selected metrics and log their values
+P = [[1, 0],
+     [0, 1],
+     [0, 0]]
 ```
 
-The projection stays in data/evaluation code. File ownership stays in `experiment.py`; the training update consumes an explicit batch and mutates only the supplied model and optimizer. This makes a fixed-batch overfitting check possible without controlling hidden random draws or creating files.
+The paper writes column vectors as `x=P*x_hat`. The package stores samples as rows, so the corresponding operation is `x_hat @ P.T`. It produces the observed row `[1,0,0]`. Projecting that row back with `x @ P` recovers `[1,0]`. Because `P.T @ P=I`, embedding preserves lengths and pairwise distances for points in the intrinsic plane.
 
-The exercise interfaces in [training.py](src/jit_toy/training.py) follow those boundaries:
+The real experiment draws a Gaussian matrix of shape `[D,2]` and takes the reduced QR decomposition's orthonormal factor as `P`. D02 creates this matrix once for a dimension and projection seed. Redrawing it per batch, prediction target, or plot would change the data distribution and invalidate the controlled comparison.
 
-- T01 receives the parameter iterable and learning rate. The experiment passes `model.parameters()` after moving the model to its device. Use AdamW with JiT's betas `(0.9,0.95)` and explicit zero weight decay.
-- T02 receives the model, optimizer, `FlowBatch`, and prediction type. It returns fresh Python scalar metrics after a complete update. It does not sample noise, read configuration files, or log.
-- T03 receives the re-iterable batch source, optimizer, configuration, flow generator, and `on_metrics(step, metrics)` callback. It performs exactly `train_steps` updates, reports every completed step starting at one, and returns the final metrics. Configuration is appropriate here because this loop uses the device, update budget, prediction type, and time settings together.
-- E01 owns the optimizer and generator lifetimes, the metric file, and the callback. Its callback records every `log_every` steps and the final step. A callback error propagates; the run must not report completion after a failed metric write.
+D01 defines the local spiral policy. Draw one scalar `u` per sample uniformly from `[0,1)`, set `angle=2*pi*turns*u` and `radius=spiral_radius*u`, then stack `radius*cos(angle)` and `radius*sin(angle)` along the feature axis. Using independent random values for radius and angle would produce a disk-like distribution rather than this spiral. Uniform `u` also means the samples are not uniform in arc length; that density must remain unchanged across runs.
 
-The baseline uses a fixed absolute learning rate of 0.001, without batch-size scaling, warmup, exponential moving averages, mixed precision, or distributed training. The short final batch is retained to practice dynamic shapes. Use the actual batch size when drawing time and noise. The data is already float32; image normalization by 255 would be incorrect.
+The ownership rule follows from the experiment: the data layer owns intrinsic samples and `P`; the model receives neither. The model sees only `z [B,D]` and `t [B,1]`. Noise has shape `[B,D]` and contains an independent standard Gaussian coordinate in every observed dimension. Embedding two-dimensional noise with `P` would remove the off-manifold prediction problem the experiment is intended to expose.
 
-These interfaces are exercises, not implemented training code. Keep the required PyTorch inheritance for `ToyMLP` and `ObservedDataset`, but do not add new base classes, model registries, or configuration hierarchies before another implementation requires them.
-
-## 6. Sampling and saved artifacts
-
-Sampling solves the ordinary differential equation `dz/dt=v_pred(z,t)` in observed space. S01 implements Euler and Heun updates. Heun evaluates velocity at the current state, makes a provisional Euler state, evaluates velocity there at the next time, and uses the average velocity to advance the original state. Average velocities, not raw clean-data or noise predictions.
-
-S02 initializes a full-dimensional standard Gaussian and integrates 50 uniform intervals over `[time_eps,1-time_eps]`, using 51 grid points. It runs without gradient tracking, returns detached CPU float32 samples, and restores the model's previous training flag. The integrator never projects into intrinsic coordinates.
-
-This endpoint policy is approximate: a Gaussian at `time_eps` is not the exact interpolated distribution there, and the final state is near-data rather than the exact `t=1` endpoint. Full JiT instead integrates from zero to one, clamps the clean-data denominator at its default 0.05, and finishes with Euler. That implementation supports direct clean-data prediction only. Keep one shared policy for the toy's three prediction types before considering a separate endpoint comparison.
-
-E01 creates a new run directory. The planned artifacts have the following responsibilities:
-
-| Artifact | Contents and lifetime |
-| --- | --- |
-| `config.json` | Fully resolved configuration |
-| `environment.json` | Python, package and PyTorch versions; selected device |
-| `metrics.jsonl` | One JSON object per recorded step: `step`, `loss`, `loss_sum`; opened exclusively and closed by E01 |
-| `checkpoint.pt` | `schema_version=1`, primitive configuration dict, CPU `model_state` tensors, `projection`, `reference_intrinsic`; written after training completes |
-
-E02 loads the checkpoint on the CPU with `weights_only=True`, validates its schema, restores the exact projection, and loads the model state strictly. It may override the device for portability. It writes a sample artifact containing `schema_version=1`, `config`, `observed`, `generated_intrinsic`, `reference_intrinsic`, `projection`, and scalar `residual`. E03 plots those saved arrays without retraining.
-
-Checkpoints support inference only. A future resume feature would also need optimizer state, completed-step count, random-generator state, and loader position. Do not label the current schema resumable. Reject existing output paths rather than overwriting another run, and report completion only after the checkpoint write succeeds.
-
-Projection can hide generated noise perpendicular to the data plane. Alongside the scatter plot, V01 measures `mean_N(sum_D((X-(X@P)@P.T)^2))`, the mean squared distance to the linear span of `P`. At `D=2` this is approximately zero even for poor samples. It also cannot detect samples that lie in the plane but miss the spiral. Inspect coverage and off-subspace energy together, and show outliers rather than silently clipping them from plot limits.
-
-## 7. Relationship to the full JiT implementation
-
-The reference is the existing repository code, not a new image-model dependency. Read the functions below beside the corresponding exercises. The package stays independent of image training imports, distributed execution, and image-quality tooling.
-
-| Existing code | Toy exercises | Preserved behavior and explicit adaptation |
+| Value | Shape | Owner |
 | --- | --- | --- |
-| [Denoiser.sample_t / forward](../denoiser.py) | F01–F04 | Logit-normal times, interpolation, velocity conversion, loss reduction; use `[B,D]` tensors and the documented interior interval |
-| Denoiser._forward_sample | F03 | Clean-data conversion; add noise/velocity branches from Table 1; omit class guidance |
-| Denoiser._euler_step / _heun_step / generate | S01–S02 | Velocity-based updates and disabled gradients; endpoint policy differs as described above |
-| [TimestepEmbedder / JiT.blocks / FinalLayer](../model_jit.py) | M01–M02 | Registered modules, time conditioning, unconstrained output; replace the Transformer with the specified ReLU network |
-| [train_one_epoch](../engine_jit.py) | T02–T03 | Training mode, device transfer, finite loss, gradient reset, backward, optimizer step; omit image scaling and unconditional CUDA calls |
-| [main](../main_jit.py) | D07 / T01 / E01 | Seed, loader, model and optimizer lifetimes; retain AdamW settings but keep short final batches |
-| [save_model](../util/misc.py) | E01 | State-dictionary checkpointing; use the toy's separate inference schema |
-| [sampling demo](../sample_jit.py) | E02 / S02 | Device checks, CPU loading, `weights_only=True`, strict state load, inference mode |
+| Intrinsic samples | `[N,2]` | Data construction and evaluation |
+| Projection `P` | `[D,2]` | Data construction, checkpoint metadata, and evaluation |
+| Clean observed batch | `[B,D]` | Dataset and training loop |
+| Time | `[B,1]` | Flow functions and sampler |
+| Gaussian noise, noisy sample, prediction, velocity | `[B,D]` | Training and sampling |
+| Loss | Scalar tensor | Training update until backward completes |
 
-The configuration field names, command names, default values, and 12-case matrix remain unchanged by this refactor. Only unfinished exercise interfaces changed: F01 takes time settings directly; T01 takes parameters and learning rate; T02 takes a prepared batch; T03 receives its optimizer, generator, and metrics callback instead of opening a file.
+Create random tensors on the central processing unit in float32 with explicit `torch.Generator` instances. The training loop moves a complete batch to the model device. This makes ownership of random state visible and keeps a data draw from silently changing another stream.
 
-## 8. Verification and the next exercise
+## 3. One sample through the flow equations
 
-The baseline scaffold tests cover configuration rejection, the 12-case matrix, command output, exercise-error translation, output-path protection, and source-located logging. They cannot establish the correctness of unfinished tensor operations. Run them with `python -m unittest discover -s toy_experiment/tests -v` in the activated environment; add independent numerical checks as the exercises become implemented.
+Take one coordinate with clean value `x=2`, noise `epsilon=-1`, and time `t=0.25`. Equation 1 gives `z=t*x+(1-t)*epsilon=-0.25`. Equation 2 gives target velocity `v=x-epsilon=3`.
 
-Before a quality comparison, verify projection orthogonality and round trips, oracle prediction-to-velocity conversion, a hand-calculated loss, gradients through the model, fixed-batch overfitting, a known velocity field, and checkpoint reload equality. Then run the smoke configuration through training, sampling, and plotting. Ten updates test the workflow, not convergence.
+If the network directly predicts the correct clean value, the conversion `(x_pred-z)/(1-t)` returns `3`. If it predicts the correct noise, `(z-epsilon_pred)/t` also returns `3`. A direct velocity prediction already equals `3`. This concrete case shows why all three network outputs can be transformed into one loss space.
 
-For the eventual 12-case comparison, hold data, projection, architecture, initialization, update budget, and random streams fixed across prediction types at each dimension. Save one configuration per case and use separate output directories. A four-by-four panel can show dimensions as rows and reference/clean/noise/velocity as columns. Repeat seeds and check training-budget and endpoint sensitivity before attributing a difference to prediction type. No expected quality ranking belongs in a hard-coded pass condition.
+[flow.py](src/jit_toy/flow.py) owns these conversions:
 
-The next implementation step is D01, `sample_spiral`. Hold `N`, turns, radius, dtype, and seed fixed. Accept the exercise when it returns finite `[N,2]` float32 points within the configured radius and two fresh generators with the same seed reproduce the same points. If those checks fail, inspect the shared radial/angular draw and feature-axis stacking before proceeding to the projection exercise.
+| Direct network output | Predicted velocity |
+| --- | --- |
+| Clean data | `(raw-z)/(1-t)` |
+| Noise | `(z-raw)/t` |
+| Velocity | `raw` |
+
+F02 constructs `z` and the target velocity from explicit clean data, time, and noise. F03 converts the raw network output without detaching it, so gradients still reach the model. F04 rejects unequal shapes before reduction and computes `mean_B(mean_D((predicted-target)^2))`. This matches the reduction in the repository's `Denoiser.forward`. It equals the paper's squared Euclidean norm divided by `D`; the constant changes gradient scale, so the same reduction must be used in every run.
+
+Time sampling follows `Denoiser.sample_t`: draw a normal value with mean `-0.8` and standard deviation `0.8`, then apply the sigmoid. Those parameter values come from `main_jit.py`, not Section 3.3. The toy policy clamps time to `[time_eps,1-time_eps]`, with `time_eps=0.001`, because noise conversion is singular at zero and clean-data conversion is singular at one. The clamp changes the ideal logit-normal distribution near both endpoints.
+
+The full JiT denoiser instead clamps only the denominator in its clean-data-to-velocity conversion and integrates from zero to one. Its target `(x-z)/(1-t).clamp_min(t_eps)` equals `x-epsilon` only where the clamp is inactive. The toy must use one shared interior-time policy for all three prediction targets; combining the full JiT endpoint rule with the toy noise-prediction branch would make the comparison asymmetric.
+
+## 4. One training update in execution order
+
+The numerical core stays testable because random draws and file writes sit outside the parameter update:
+
+```text
+experiment.py creates model, optimizer, random generator, and metrics writer
+    -> training.py fetches clean data and draws time and full-dimensional noise
+        -> flow.py builds a FlowBatch containing z, t, and target velocity
+            -> model.py maps z and t to one raw prediction
+            -> flow.py converts the prediction and reduces the loss
+        -> training.py clears gradients, runs backward, checks gradients, and steps
+    -> experiment.py records returned scalar metrics
+```
+
+T01 receives only model parameters and a learning rate. It creates AdamW with the full JiT code's beta values `(0.9,0.95)` and explicit zero weight decay. The caller constructs it after moving the model to its device. The parameter iterable may be one-shot, so T01 must not consume it for validation before passing it to PyTorch.
+
+T02 receives a model, optimizer, immutable-by-contract `FlowBatch`, and prediction name. It clears old gradients, runs the forward and loss functions, rejects a nonfinite loss, calls backward, rejects nonfinite gradients, and then steps the optimizer. It returns detached Python scalars only after the step. Because it performs no random draw and opens no file, a test can pass the same fixed batch repeatedly and determine whether the model can overfit it.
+
+T03 owns iteration over clean batches and calls T02 exactly `train_steps` times. It draws time and noise from the caller's generator, uses the actual batch length when the last batch is short, and restarts a re-iterable loader after exhaustion. After a completed update it calls `on_metrics(step, metrics)` with one-based step numbers. Callback failures propagate, so a failed metrics write cannot be reported as a completed run.
+
+E01 owns effects at the experiment boundary. It validates device availability, creates the run directory, records the resolved configuration and environment, builds the data/model/optimizer/generators, opens `metrics.jsonl` exclusively, and passes a writer callback to T03. After training completes, it writes the checkpoint through a temporary path and rename. It logs completion only after that rename succeeds.
+
+The baseline deliberately omits batch-size learning-rate scaling, warmup, moving averages, mixed precision, distributed training, and gradient clipping. These mechanisms are not required to answer the first implementation question and would make failures harder to localize. The configured absolute learning rate is `0.001`.
+
+## 5. Sampling and evaluation
+
+Sampling starts with standard Gaussian points in all `D` observed dimensions and solves `dz/dt=v_pred(z,t)`. Euler uses the velocity at the current state. Heun first makes an Euler proposal, evaluates velocity at that proposed state and next time, averages the two velocities, and advances the original state. It must average velocities after F03 conversion, not raw clean-data or noise predictions.
+
+The toy integrates over `[time_eps,1-time_eps]` with 50 intervals and 51 grid points. Starting from a pure Gaussian at `time_eps` approximates the true distribution at that time, and stopping at `1-time_eps` returns a near-data sample. The sampler therefore does not reproduce the exact zero-to-one endpoint behavior of `Denoiser.generate`. This limitation applies equally to all three prediction targets and must be recorded with results.
+
+The sampler runs with inference mode enabled, returns detached CPU float32 points, and restores the model's previous training flag even when an error occurs. It never applies `P`; projection belongs to evaluation.
+
+Projecting a generated point with `X @ P` can hide error in the other `D-2` dimensions. V01 therefore also computes
+
+```text
+mean_N(sum_D((X - (X @ P) @ P.T)^2))
+```
+
+This value measures squared distance from the linear span of `P`. It cannot measure distance along that plane to the spiral, and it is approximately zero for every point when `D=2`. A plotted spiral can look plausible while carrying large perpendicular error, and a small residual can coexist with a poor spiral. Interpret the scatter plot and residual together.
+
+E01 writes an inference checkpoint containing schema version, resolved configuration, CPU model state, projection, and held-out intrinsic reference points. E02 loads it on the CPU with `weights_only=True`, validates the schema, restores the model strictly, samples in the selected device, and saves both observed and projected results. E03 reads that saved artifact and plots without retraining. The checkpoint is not resumable because it excludes optimizer state, completed step, loader position, and random-generator state.
+
+## 6. Relationship to the full JiT code
+
+The toy package reuses the existing implementation as a behavioral reference without importing its image, distributed-training, or evaluation stack.
+
+| Existing implementation | Toy exercise | Relationship |
+| --- | --- | --- |
+| [Denoiser.sample_t and forward](../denoiser.py) | F01–F04 | Preserve logit-normal time sampling, interpolation, clean-data conversion, and loss reduction; adapt image tensors to `[B,D]` and add Table 1's noise and velocity branches |
+| Denoiser._euler_step and _heun_step | S01 | Preserve the update equations |
+| Denoiser.generate | S02 | Preserve Gaussian initialization, time grid, and disabled gradients; use the shared interior endpoint policy described above |
+| [TimestepEmbedder, JiT.blocks, and FinalLayer](../model_jit.py) | M01–M02 | Preserve registered modules, time conditioning, and an unconstrained output; use the five-layer network required by Section 3.3 |
+| [train_one_epoch](../engine_jit.py) | T02–T03 | Preserve training mode, device transfer, finite-loss check, gradient reset, backward, and optimizer step; omit image normalization and unconditional CUDA operations |
+| [main](../main_jit.py) | D07, T01, E01 | Preserve seed, loader, model, optimizer, and checkpoint lifetimes; retain AdamW beta values and zero weight decay |
+| [sampling demo](../sample_jit.py) | E02 | Preserve CPU checkpoint loading, `weights_only=True`, strict state loading, device validation, and inference mode |
+
+The paper is the contract for the comparison. The repository code is the reference implementation for shared mechanics. The toy-specific spiral, interior endpoint policy, scalar time concatenation, learning rate, update budget, and artifact schema are local choices. Experimental results must name those choices rather than presenting them as paper settings.
+
+## 7. Configuration and reproducibility
+
+The baseline configuration names every setting. The smoke configuration overrides only counts needed for a short wiring run. JSON parsing rejects unknown fields so a misspelled option cannot silently fall back to a default.
+
+Use separate CPU random generators for training points (`seed`), held-out points (`seed+1`), data shuffling (`seed+2`), flow draws (`seed+3`), and projection (`projection_seed`). Seed model initialization separately. Reinitialize each prediction-target run from the same model seed; do not continue training one target's weights under another target.
+
+Saving seeds is necessary but insufficient for exact reproduction across hardware and software versions. Save the actual projection, resolved configuration, Python and PyTorch versions, selected device, and model state. Report comparisons as results from that recorded setup unless repeated runs establish broader behavior.
+
+The intended experiment artifacts are:
+
+| Artifact | Evidence it preserves |
+| --- | --- |
+| `config.json` | Resolved controls for the run |
+| `environment.json` | Runtime versions and selected device |
+| `metrics.jsonl` | One-based step and scalar loss records selected by the E01 callback |
+| `checkpoint.pt` | Model state, projection, reference points, and schema version |
+| Sample artifact | Observed samples, projected samples, projection, reference points, and residual |
+
+Reject existing output paths. A partially created training directory may remain after failure, but it must not contain a completion marker or final checkpoint presented as successful.
+
+## 8. Verification order and next action
+
+Verification follows data flow. First check spiral shape and reproducibility. Then check `P.T @ P`, embedding norm preservation, and projection round trips. Next use the concrete values from Section 3 to verify that oracle clean-data, noise, and velocity predictions all convert to velocity `3`. Check the loss against a hand calculation and confirm gradients reach every model layer. Only then test a complete update, fixed-batch overfitting, loader restart, Euler and Heun on known fields, checkpoint reload equality, and the smoke workflow.
+
+The 12-run comparison comes after those invariant checks. At each `D`, keep data, projection, initialization, random streams, update count, and sampler fixed while changing only the direct prediction target. Report individual seeds and variation before treating the paper's qualitative ordering as reproduced.
+
+The next bounded action is D01, `sample_spiral`. Hold count, turns, radius, dtype, and seed fixed. Pass D01 only if the output has shape `[count,2]`, contains finite float32 values, stays within the configured radius, and two newly created generators with the same seed return identical points. If any check fails, inspect the shared `u` draw and the axis passed to `torch.stack`; do not proceed to D02.

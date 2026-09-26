@@ -1,59 +1,77 @@
-# JiT toy experiment: guided implementation
+# JiT Section 3.3 practice package
 
-This package provides a working command-line interface and unfinished PyTorch exercises for Section 3.3 of *Back to Basics: Let Denoising Generative Models Denoise*. You can inspect configurations now. Data generation, the model, training, sampling, and evaluation remain yours to implement; the package has no experimental results yet.
+This package is a guided implementation of the toy experiment in Section 3.3 of *Back to Basics: Let Denoising Generative Models Denoise*. The command-line interface and configuration validation work. The tensor operations, model, training loop, sampler, and evaluation remain explicit exercises, so the package does not yet reproduce Figure 2 or provide experimental results.
 
-Start with [the design](DESIGN.md) for the equations and their connection to the existing JiT code. Follow [the ordered TODO list](TODO.md) to implement one exercise at a time. Each stub raises `ExerciseNotImplemented` with a matching exercise ID. Comments give tensor shapes, relevant operations, pitfalls, and checks without supplying the numerical bodies.
+Read [DESIGN.md](DESIGN.md) before writing numerical code. It derives the comparison from one sample, identifies which behavior comes from the paper and which behavior is a local implementation choice, and follows one training update in execution order. Then use [TODO.md](TODO.md) to complete the exercises in dependency order.
 
-## Use the existing environment
+## Set up the package
 
-Run these commands from the repository root. Activate the existing `.venv` before installing, once per shell session. The package supports Python 3.9 and later; it does not create a second environment.
+Run every command from the repository root. Activate the existing environment before installing the package. Activation changes `python`, `pip`, and `jit-toy` for the current shell; repeat it once when opening a new shell.
 
 ```bash
 source .venv/bin/activate
 pip install --no-build-isolation -e ./toy_experiment
+```
 
-jit-toy --help
-jit-toy plan --config toy_experiment/configs/smoke.json
+The editable install uses the existing PyTorch environment and makes source edits visible without reinstalling. It installs Click and Loguru from [pyproject.toml](pyproject.toml). Plotting is optional and can wait until exercise V02:
+
+```bash
+pip install --no-build-isolation -e './toy_experiment[plot]'
+```
+
+## Inspect the planned comparison
+
+The following command validates the baseline configuration and prints the 12 planned runs: four observed dimensions crossed with clean-data, noise, and velocity prediction.
+
+```bash
 jit-toy plan --config toy_experiment/configs/baseline.json --suite
+```
+
+The JSON array goes to standard output. A Loguru record containing the source path and line number goes to standard error. This command does not import PyTorch, train a model, or create an experiment directory.
+
+Use the smoke configuration when you need a short end-to-end wiring check after implementing the exercises:
+
+```bash
+jit-toy plan --config toy_experiment/configs/smoke.json
+```
+
+The smoke configuration requests only ten optimizer updates. Passing it will show that the parts connect; it will not establish model quality.
+
+## Run the current checks
+
+```bash
 python -m unittest discover -s toy_experiment/tests -v
 ```
 
-Editable installation makes source edits visible without reinstalling. `--no-build-isolation` uses the build tools already in the environment. If those tools need updating, run `pip install 'pip>=23,<26' 'setuptools>=64'` in the activated shell before installing this package. The required dependencies are PyTorch, Click, and Loguru; plotting has an optional dependency on matplotlib. No additional dependency or environment manager is needed.
+These tests cover configuration validation, command dispatch, output-path protection, intentional exercise errors, and source-located logging. They do not test the unfinished tensor algebra, gradients, training behavior, or sample quality.
 
-## Inspect one run before implementing it
+## Implement the exercises
 
-`plan` validates partial JSON overrides and prints a resolved configuration object. `plan --suite` prints an array of 12 configurations: four observed dimensions times three prediction types. It plans the comparison; it does not train the models. Both commands write JSON to standard output and logs to standard error. All paths are relative to the current working directory.
-
-```bash
-jit-toy --log-file outputs/toy/plan.log plan --suite
-```
-
-Each log message includes its timestamp, severity, module, function, source path, and line number. Global logging options precede the command. The [Click quickstart](https://click.palletsprojects.com/en/stable/quickstart/) and [Loguru logger reference](https://loguru.readthedocs.io/en/stable/api/logger.html) describe the two libraries used at this boundary.
-
-## Run the experiment after completing the exercises
-
-These commands are the intended workflow. They currently exit nonzero at an exercise stub and do not create training or sampling artifacts.
+Each unfinished function raises `ExerciseNotImplemented` with an identifier such as D01 or M01. Find the remaining stops with:
 
 ```bash
-jit-toy --log-file outputs/toy/smoke.log train \
-  --config toy_experiment/configs/smoke.json --output outputs/toy/smoke
-jit-toy sample --checkpoint outputs/toy/smoke/checkpoint.pt \
-  --output outputs/toy/smoke/samples.pt --device cpu
-
-# Install plotting when you reach V02, in the same activated environment.
-pip install --no-build-isolation -e './toy_experiment[plot]'
-jit-toy plot --samples outputs/toy/smoke/samples.pt \
-  --output outputs/toy/smoke/comparison.png
+rg -n 'ExerciseNotImplemented' toy_experiment/src/jit_toy
 ```
 
-Keep the training log outside the new run directory: opening a log creates its parent, while `train` rejects an existing run directory. Sampling and plotting also reject existing output files. The smoke configuration requests ten updates to check the eventual workflow; it is not a model-quality experiment.
+Complete the items in [TODO.md](TODO.md) in order. Keep each stop until its stated invariant has an independent check. The first exercise is D01, `sample_spiral`: for fixed count, turns, radius, and seed, return reproducible finite float32 points with shape `[count, 2]` and radius no greater than the configured limit.
 
-## Complete the next exercise
+## Run the completed experiment
 
-Find the stubs with:
+After completing D01 through E03, the intended command sequence is:
 
 ```bash
-rg -n 'ExerciseNotImplemented|[DMFTSVE][0-9]{2}' toy_experiment/src/jit_toy
+jit-toy --log-file outputs/toy-smoke.log train \
+  --config toy_experiment/configs/smoke.json \
+  --output outputs/toy-smoke
+
+jit-toy sample \
+  --checkpoint outputs/toy-smoke/checkpoint.pt \
+  --output outputs/toy-smoke-samples.pt \
+  --device cpu
+
+jit-toy plot \
+  --samples outputs/toy-smoke-samples.pt \
+  --output outputs/toy-smoke-comparison.png
 ```
 
-The supplied tests cover configuration, command dispatch, error handling, and logging. They do not establish numerical correctness. Write the shape, algebra, and gradient checks in [TODO.md](TODO.md) as you implement each exercise. Begin with **D01, `sample_spiral`**: return finite float32 points of shape `[N,2]` with reproducible draws from the supplied generator.
+These numerical commands currently stop at E01, E02, or E03 with a nonzero exit status. They refuse existing output paths so a practice run cannot silently overwrite earlier work. Keep the Loguru file outside the new training directory because opening the log creates its parent before `train` checks the output path.
