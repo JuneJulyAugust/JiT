@@ -1,63 +1,78 @@
 # JiT Section 3.3 practice package
 
-This package is a guided implementation of the toy experiment in Section 3.3 of *Back to Basics: Let Denoising Generative Models Denoise*. The command-line interface and configuration validation work. The tensor operations, model, training loop, sampler, and evaluation remain explicit exercises, so the package does not yet reproduce Figure 2 or provide experimental results.
+The package validates configurations and dispatches commands, but all numerical functions remain exercises. It has produced no trained model or generated samples. The goal is to implement the toy comparison in Section 3.3 of *Back to Basics: Let Denoising Generative Models Denoise*: predict clean data, noise, or velocity while holding the data, network, training budget, and velocity loss fixed.
 
-Read [DESIGN.md](DESIGN.md) before writing numerical code. It derives the comparison from one sample, identifies which behavior comes from the paper and which behavior is a local implementation choice, and follows one training update in execution order. Then use [TODO.md](TODO.md) to complete the exercises in dependency order.
+Read [DESIGN.md](DESIGN.md) for the equations, controls, and implementation contracts. Use [TODO.md](TODO.md) to implement and check one exercise at a time.
 
-## Set up the package
+## Contents
 
-Run every command from the repository root. Activate the existing environment before installing the package. Activation changes `python`, `pip`, and `jit-toy` for the current shell; repeat it once when opening a new shell.
+- [1. Set up the package](#1-set-up-the-package)
+- [2. Inspect the planned comparison](#2-inspect-the-planned-comparison)
+- [3. Check the working infrastructure](#3-check-the-working-infrastructure)
+- [4. Implement the numerical exercises](#4-implement-the-numerical-exercises)
+- [5. Run after completing the exercises](#5-run-after-completing-the-exercises)
+- [6. Next action](#6-next-action)
+
+## 1. Set up the package
+
+Run commands from the repository root. The following commands assume the existing `.venv` environment is available. Activate it once in each new shell, then install the package:
 
 ```bash
 source .venv/bin/activate
 pip install --no-build-isolation -e ./toy_experiment
 ```
 
-The editable install uses the existing PyTorch environment and makes source edits visible without reinstalling. It installs Click and Loguru from [pyproject.toml](pyproject.toml). Plotting is optional and can wait until exercise V02:
+Activation selects the environment's Python and installed commands. The editable install makes later source edits visible without reinstalling. [pyproject.toml](pyproject.toml) declares Python 3.9 or later, PyTorch, Click for commands, and Loguru for logs. The existing environment must also supply the setuptools build requirement because this command disables build isolation.
+
+For exercise V02, install the optional plotting dependency:
 
 ```bash
 pip install --no-build-isolation -e './toy_experiment[plot]'
 ```
 
-## Inspect the planned comparison
+## 2. Inspect the planned comparison
 
-The following command validates the baseline configuration and prints the 12 planned runs: four observed dimensions crossed with clean-data, noise, and velocity prediction.
+For example, a clean-data run at observed dimension $D=8$ embeds two-coordinate samples into eight-coordinate vectors. The suite repeats that setting for noise and velocity prediction, then repeats the three targets at the other dimensions. This command prints all 12 configurations:
 
 ```bash
 jit-toy plan --config toy_experiment/configs/baseline.json --suite
 ```
 
-The JSON array goes to standard output. A Loguru record containing the source path and line number goes to standard error. This command does not import PyTorch, train a model, or create an experiment directory.
+The JSON array goes to standard output; the validation log, including source path and line number, goes to standard error. The suite changes only `observed_dim` and `prediction`. It covers $D\in\{2,8,16,512\}$ and command values `x`, `eps`, and `v`. A successful plan establishes that the configurations are valid; it does not execute numerical code or create a run directory.
 
-Use the smoke configuration when you need a short end-to-end wiring check after implementing the exercises:
+To inspect the smaller smoke configuration, which is intended to check that the completed components connect, run:
 
 ```bash
 jit-toy plan --config toy_experiment/configs/smoke.json
 ```
 
-The smoke configuration requests only ten optimizer updates. Passing it will show that the parts connect; it will not establish model quality.
+This plan resolves to ten training updates and five sampling intervals. Those counts are too small to establish sample quality.
 
-## Run the current checks
+## 3. Check the working infrastructure
 
 ```bash
 python -m unittest discover -s toy_experiment/tests -v
 ```
 
-These tests cover configuration validation, command dispatch, output-path protection, intentional exercise errors, and source-located logging. They do not test the unfinished tensor algebra, gradients, training behavior, or sample quality.
+The supplied tests cover configuration validation, command dispatch, refusal to overwrite outputs, reporting of exercise exceptions, and logs that name the actual calling source line. They also check that help and planning work without importing PyTorch. They do not check tensor algebra, gradients, training convergence, or generated samples.
 
-## Implement the exercises
+A passing infrastructure suite is the starting condition for the exercises. Each numerical exercise needs its own check from [TODO.md](TODO.md) before the next dependent exercise begins.
 
-Each unfinished function raises `ExerciseNotImplemented` with an identifier such as D01 or M01. Find the remaining stops with:
+## 4. Implement the numerical exercises
+
+An unfinished function raises `ExerciseNotImplemented` with an exercise identifier such as D01 or M01. Find those functions with:
 
 ```bash
 rg -n 'ExerciseNotImplemented' toy_experiment/src/jit_toy
 ```
 
-Complete the items in [TODO.md](TODO.md) in order. Keep each stop until its stated invariant has an independent check. The first exercise is D01, `sample_spiral`: for fixed count, turns, radius, and seed, return reproducible finite float32 points with shape `[count, 2]` and radius no greater than the configured limit.
+Begin with D01, `sample_spiral`. With count $N$, fixed turns and radius, and an explicit random generator, it must return finite float32 points of shape $N\times2$ whose radial distance does not exceed the configured radius. Two fresh generators with the same seed must return identical points. The equations and the reason radius and angle share one random draw are in [DESIGN.md, Section 2](DESIGN.md#2-one-sample-through-the-data-path).
 
-## Run the completed experiment
+Keep an exercise exception in place until the function has an implementation and its independent check passes. The checklist order follows the data path: data, network, flow conversions, training, sampling, then saved artifacts and plotting.
 
-After completing D01 through E03, the intended command sequence is:
+## 5. Run after completing the exercises
+
+After D01 through E03 pass their checks, use these commands for the first complete run:
 
 ```bash
 jit-toy --log-file outputs/toy-smoke.log train \
@@ -74,4 +89,12 @@ jit-toy plot \
   --output outputs/toy-smoke-comparison.png
 ```
 
-These numerical commands currently stop at E01, E02, or E03 with a nonzero exit status. They refuse existing output paths so a practice run cannot silently overwrite earlier work. Keep the Loguru file outside the new training directory because opening the log creates its parent before `train` checks the output path.
+Training must save a checkpoint before sampling can begin; sampling must save its artifact before plotting can begin. Currently, the corresponding command reaches E01, E02, or E03 and exits with an exercise error when its input-path checks pass. None of these commands currently supplies the missing numerical implementation.
+
+Choose new output paths for each run. Commands reject existing outputs. Keep the Loguru file outside the new training directory: opening the log creates its parent directory before `train` checks that the run directory is absent.
+
+A completed smoke run must produce parseable metrics, a reloadable checkpoint, finite samples, and a plot in a new process. Passing that sequence establishes that the components connect. The controlled 12-run comparison and repeated seeds are needed to evaluate the paper's qualitative result.
+
+## 6. Next action
+
+Implement D01 with count, turns, radius, dtype, and seed fixed. Pass it only when shape, finiteness, radial bounds, and fresh-generator reproducibility all hold. If a check fails, inspect the shared random draw and coordinate stacking before moving to D02.
