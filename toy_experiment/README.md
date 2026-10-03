@@ -77,7 +77,7 @@ An unfinished function raises `ExerciseNotImplemented` with an exercise identifi
 rg -n 'ExerciseNotImplemented' toy_experiment/src/jit_toy
 ```
 
-Begin with D01, `sample_spiral`. With count $N$, fixed turns and radius, and an explicit random generator, it must return finite float32 points of shape $N\times2$ whose radial distance does not exceed the configured radius. Two fresh generators with the same seed must return identical points. The equations and the reason radius and angle share one random draw are in [DESIGN.md, Section 2](DESIGN.md#2-one-sample-through-the-data-path).
+Begin with D01, `sample_spiral`. With count $N$, fixed turns and radius, and an explicit random generator, it must return finite float32 points of shape $N\times2$ whose radial distance does not exceed the configured radius. Two fresh generators with the same seed must return identical points. The equations and the reason radius and angle share one random draw are in [DESIGN.md, Section 1](DESIGN.md#1-draw-the-clean-data).
 
 Keep an exercise exception in place until the function has an implementation and its independent check passes. The checklist order follows the data path: data, network, flow conversions, training, sampling, then saved artifacts and plotting.
 
