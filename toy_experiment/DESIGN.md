@@ -28,7 +28,7 @@ The controlled comparison is:
 | Factor | Fixed or varied |
 | --- | --- |
 | Intrinsic dimension | Fixed at $d=2$ |
-| Observed dimension | Varied over $D\in\{2,8,16,512\}$ |
+| Observed dimension | Varied over $D\in\lbrace 2,8,16,512\rbrace$ |
 | Direct prediction | Varied over clean data $x$, noise $\epsilon$, and velocity $v$ |
 | Projection, intrinsic samples, initial weights, random streams | Fixed across prediction targets at a given $D$ |
 | Network | Five Linear layers, four hidden rectified linear unit activations, width 256 |
@@ -42,7 +42,7 @@ Figure 2 supplies a qualitative target for comparison, not a test oracle. No tes
 Take a point $\hat{x}=(1,0)$ in the underlying two-coordinate space and let $D=3$. Here, intrinsic coordinates mean these two source coordinates; observed coordinates mean the $D$ coordinates supplied to the model. The local noiseless spiral is itself a one-parameter curve within the two-coordinate space. For this hand calculation, use the simple column-orthonormal projection
 
 $$
-P=\begin{bmatrix}1&0\\0&1\\0&0\end{bmatrix},\qquad P^{\mathsf T}P=I_2.
+P=\begin{bmatrix}1&0\cr 0&1\cr 0&0\end{bmatrix},\qquad P^{\mathsf T}P=I_2.
 $$
 
 The paper writes column vectors as $x=P\hat{x}$. The package stores samples as rows, so the corresponding operation is $x=\hat{x}P^{\mathsf T}=(1,0,0)$. Projecting that row back gives $xP=(1,0)$. This simple matrix makes the arithmetic visible; the experiment must use the random matrix described below.
@@ -50,17 +50,17 @@ The paper writes column vectors as $x=P\hat{x}$. The package stores samples as r
 For any two intrinsic rows $a$ and $b$, embedding preserves squared distance:
 
 $$
-\|(a-b)P^{\mathsf T}\|_2^2=(a-b)P^{\mathsf T}P(a-b)^{\mathsf T}=\|a-b\|_2^2.
+\lVert (a-b)P^{\mathsf T}\rVert_2^2=(a-b)P^{\mathsf T}P(a-b)^{\mathsf T}=\lVert a-b\rVert_2^2.
 $$
 
 The identity follows from $P^{\mathsf T}P=I_2$. Setting $b=0$ also proves preservation of vector lengths.
 
 The package must draw a Gaussian matrix of shape $D\times2$ and factor it as $A=PR$, where $P$ has orthonormal columns and $R$ is triangular. This reduced QR decomposition is a local way to construct the fixed random matrix specified by the paper. D02 must create it once for a dimension and projection seed. Redrawing it per batch, prediction target, or plot would change the data distribution and invalidate the controlled comparison.
 
-D01 defines the local spiral policy. For each sample draw $u\sim\operatorname{Uniform}[0,1)$ and set
+D01 defines the local spiral policy. Let $K$ be the number of turns (`spiral_turns`) and $\rho$ the radius limit (`spiral_radius`). For each sample draw $u\sim\mathrm{Uniform}[0,1)$ and set
 
 $$
-\phi=2\pi\,\text{turns}\,u,\qquad r=\text{spiral\_radius}\,u,\qquad \hat{x}=\bigl(r\cos\phi,\;r\sin\phi\bigr).
+\phi=2\pi K u,\qquad r=\rho u,\qquad \hat{x}=\bigl(r\cos\phi, r\sin\phi\bigr).
 $$
 
 The same $u$ controls radius and angle. For example, with two turns, radius limit 2, and $u=\tfrac14$, the point has radius $\tfrac12$ and angle $\pi$, so $\hat{x}=(-\tfrac12,0)$ up to rounding. Independent draws would fill a region rather than trace the spiral. Uniform $u$ also means points are not equally spaced along the curve; that density must remain unchanged across runs.
@@ -94,7 +94,7 @@ $$
 \begin{aligned}
 \hat v_x&=\frac{\hat x-z_t}{1-t},
 &\hat v_\epsilon&=\frac{z_t-\hat\epsilon}{t},
-&\hat v_v&=\hat v.\\
+&\hat v_v&=\hat v.\cr
 \hat v_x\big|_{\hat x=2}&=\frac{2+1/4}{3/4}=3,
 &\hat v_\epsilon\big|_{\hat\epsilon=-1}&=\frac{-1/4+1}{1/4}=3,
 &\hat v_v\big|_{\hat v=3}&=3.
@@ -116,7 +116,7 @@ This concrete case shows why all three outputs can be optimized in one velocity 
 F02 must construct $z_t$ and the target velocity from explicit clean data, time, and noise. F03 must convert the raw output while preserving its gradient graph. F04 must reject unequal shapes before reduction and compute
 
 $$
-L_v=\frac{1}{B}\sum_{i=1}^{B}\frac{1}{D}\left\|\hat v_i-v_i\right\|_2^2.
+L_v=\frac{1}{B}\sum_{i=1}^{B}\frac{1}{D}\left\lVert \hat v_i-v_i\right\rVert_2^2.
 $$
 
 This matches the reduction in [Denoiser.forward](../denoiser.py#L49). The squared Euclidean norm is the sum of squared coordinate errors. Dividing by $D$ makes it a per-coordinate mean; this changes gradient scale relative to the paper's norm, so every prediction mode must use the same reduction. Report both this optimized mean and $DL_v$ when comparing dimensions.
@@ -133,9 +133,9 @@ For the scalar example, a direct-output error of magnitude $0.2$ gives the follo
 
 | Direct output | Per-sample velocity loss in $D$ coordinates | Scalar loss at $t=0.25$, $D=1$ |
 | --- | --- | --- |
-| Clean data | $\lVert\hat x-x\rVert_2^2/[D(1-t)^2]$ | $0.04/(0.75)^2\approx0.0711$ |
-| Noise | $\lVert\hat\epsilon-\epsilon\rVert_2^2/(Dt^2)$ | $0.04/(0.25)^2=0.64$ |
-| Velocity | $\lVert\hat v-v\rVert_2^2/D$ | $0.04$ |
+| Clean data | $\lVert \hat x-x\rVert_2^2/[D(1-t)^2]$ | $0.04/(0.75)^2\approx0.0711$ |
+| Noise | $\lVert \hat\epsilon-\epsilon\rVert_2^2/(Dt^2)$ | $0.04/(0.25)^2=0.64$ |
+| Velocity | $\lVert \hat v-v\rVert_2^2/D$ | $0.04$ |
 
 The common velocity loss therefore gives different time weights to errors in the direct outputs. Algebraic conversion does not make the three tasks equally tractable for a network with fixed width.
 
@@ -149,7 +149,7 @@ $$
 (I-Q)x=0,\qquad (I-Q)z_t=(1-t)(I-Q)\epsilon,\qquad (I-Q)v=-(I-Q)\epsilon=-\frac{(I-Q)z_t}{1-t}.
 $$
 
-For $\epsilon\sim\mathcal N(0,I_D)$, the mean squared perpendicular noise length is $\mathbb E\|(I-Q)\epsilon\|_2^2=\operatorname{tr}(I-Q)=D-d$. Here the trace, the sum of diagonal entries, equals the number of perpendicular directions. At $D=512$ and $d=2$, that mean is 510, although any individual draw differs.
+For $\epsilon\sim\mathcal N(0,I_D)$, the mean squared perpendicular noise length is $\mathbb E\lVert (I-Q)\epsilon\rVert_2^2=\mathrm{tr}(I-Q)=D-d$. Here the trace, the sum of diagonal entries, equals the number of perpendicular directions. At $D=512$ and $d=2$, that mean is 510, although any individual draw differs.
 
 Clean-data prediction can output zero in these directions while the velocity conversion carries the observed $z_t$ through its explicit formula. Direct noise and velocity prediction require the network output to represent the perpendicular components. The width-256 network is narrower than its 512-coordinate input and has no direct input-to-output bypass. These facts motivate the capacity comparison; they do not establish how a trained model will perform.
 
@@ -170,7 +170,7 @@ This section specifies the required execution order; the functions are still exe
 [ToyMLP](src/jit_toy/model.py#L8) must concatenate time with the noisy input along the feature axis. The baseline layer widths are
 
 $$
-D+1\;\longrightarrow\;256\;\longrightarrow\;256\;\longrightarrow\;256\;\longrightarrow\;256\;\longrightarrow\;D.
+D+1 \longrightarrow 256 \longrightarrow 256 \longrightarrow 256 \longrightarrow 256 \longrightarrow D.
 $$
 
 The four hidden layers use a rectified linear unit, which replaces negative values with zero. The final layer has no activation because clean, noise, and velocity targets can all have negative coordinates. This same architecture and initialization must be used for all three modes; F03, outside the model, gives the raw output its interpretation.
@@ -212,7 +212,7 @@ $$
 This is a conditional mean: it averages over possible clean points and noise draws while holding the observed input and time fixed. The following local derivation explains the minimizer. For any proposed velocity $a$, at fixed $z$ and $t$,
 
 $$
-\mathbb E[\|a-v\|_2^2\mid z,t]=\|a-v^*(z,t)\|_2^2+\mathbb E[\|v-v^*(z,t)\|_2^2\mid z,t].
+\mathbb E[\lVert a-v\rVert_2^2\mid z,t]=\lVert a-v^*(z,t)\rVert_2^2+\mathbb E[\lVert v-v^*(z,t)\rVert_2^2\mid z,t].
 $$
 
 The second term is independent of $a$, so the first is minimized at $a=v^*$. The clean-data conditional mean stays in the intrinsic plane, because every clean point lies there, but an average of spiral points need not lie on the spiral curve. Intermediate clean predictions should therefore not be judged as though they were final generated samples.
@@ -221,7 +221,7 @@ Sampling starts with standard Gaussian points in all $D$ observed dimensions and
 
 $$
 \begin{aligned}
-z_{k+1}^{\mathrm{Euler}}&=z_k+h\hat v(z_k,t_k),\\
+z_{k+1}^{\mathrm{Euler}}&=z_k+h\hat v(z_k,t_k),\cr
 z_{k+1}^{\mathrm{Heun}}&=z_k+\frac{h}{2}\left[\hat v(z_k,t_k)+\hat v\bigl(z_k+h\hat v(z_k,t_k),t_{k+1}\bigr)\right].
 \end{aligned}
 $$
@@ -239,7 +239,7 @@ For the simple projection in Section 2, the generated row $(1,0,2)$ projects to 
 Projecting a generated row $X_i$ with $X_iP$ can hide error in the other $D-2$ dimensions. V01 therefore also computes
 
 $$
-R=\frac{1}{N}\sum_{i=1}^{N}\left\|X_i-X_iPP^{\mathsf T}\right\|_2^2.
+R=\frac{1}{N}\sum_{i=1}^{N}\left\lVert X_i-X_iPP^{\mathsf T}\right\rVert_2^2.
 $$
 
 Because $PP^{\mathsf T}$ projects onto the plane spanned by $P$, $R$ measures mean squared distance from that plane. Compute it with projection and re-embedding, avoiding a dense $D\times D$ matrix. It is not a distance to the spiral curve, and it is zero in exact arithmetic for every point when $D=2$. Float32 arithmetic may leave a small residual.
@@ -303,21 +303,21 @@ The table explains the controls that determine data quantity, training work, and
 
 `time_mean` and `time_std` set the normal variable before the sigmoid, and `time_eps` sets the endpoint margin. For a draw $s=-0.8$, the sigmoid gives $t\approx0.310$, inside the baseline interval $[0.001,0.999]$, so clamping leaves it unchanged. These settings affect which interpolation times are trained, not the clean curve or network width. Their common policy is derived in Section 3.4.
 
-`solver` selects Euler or Heun. `sampling_steps` selects the number of equal intervals, with step size $h=(1-2\delta)/\text{sampling\_steps}$. At the baseline margin and 50 intervals, $h=0.01996$. More intervals refine the integration of the learned field; they cannot correct a poorly learned field. Record solver changes separately from training changes.
+`solver` selects Euler or Heun. Let $S$ be `sampling_steps`, the number of equal intervals, with step size $h=(1-2\delta)/S$. At the baseline margin and 50 intervals, $h=0.01996$. More intervals refine the integration of the learned field; they cannot correct a poorly learned field. Record solver changes separately from training changes.
 
 ### 7.3 Give each random stream one owner
 
-The proposed seed allocation is shown below for baseline `seed` 0 and `projection_seed` 123. Separate generator instances isolate consumption: drawing more reference points must not change training noise or data order. Model initialization has its own seeding step, even though it uses the same numeric seed as training-point generation.
+Let $s_0$ be the configured `seed`. The proposed allocation is shown below for baseline `seed` 0 and `projection_seed` 123. Separate generator instances isolate consumption: drawing more reference points must not change training noise or data order. Model initialization has its own seeding step, even though it uses the same numeric seed as training-point generation.
 
 | Random operation | Seed source | Baseline seed | Owner |
 | --- | --- | --- | --- |
 | Training points | `seed` | 0 | D06 |
-| Held-out points | $\texttt{seed}+1$ | 1 | D06 |
-| Data shuffling | $\texttt{seed}+2$ | 2 | E01 and D07 |
-| Training time and noise | $\texttt{seed}+3$ | 3 | E01 and T03 |
+| Held-out points | $s_0+1$ | 1 | D06 |
+| Data shuffling | $s_0+2$ | 2 | E01 and D07 |
+| Training time and noise | $s_0+3$ | 3 | E01 and T03 |
 | Projection | `projection_seed` | 123 | D06 |
 | Model initialization | `seed` | 0 | E01 |
-| Sampling noise | $\texttt{seed}+1$ | 1 | E02 and S02 |
+| Sampling noise | $s_0+1$ | 1 | E02 and S02 |
 
 The held-out and sampling generators reuse the numeric seed but must be separate instances. For each prediction-mode run, recreate the model and generators from the recorded seeds. Continuing another mode's trained weights would change the comparison.
 
@@ -343,4 +343,4 @@ Verification follows data flow. First check spiral shape and reproducibility. Th
 
 The 12-run comparison comes after those invariant checks. At each $D$, keep data, projection, initialization, random streams, update count, and sampler fixed while changing only the direct prediction target. Report individual seeds and variation before treating the paper's qualitative ordering as reproduced.
 
-The next bounded action is D01, `sample_spiral`. Hold count, turns, radius, dtype, and seed fixed. Pass D01 only if the output has shape $\text{count}\times2$, contains finite float32 values, stays within the configured radius, and two newly created generators with the same seed return identical points. If any check fails, inspect the shared $u$ draw and the axis passed to `torch.stack`; do not proceed to D02.
+The next bounded action is D01, `sample_spiral`. Hold count $N$, turns, radius, dtype, and seed fixed. Pass D01 only if the output has shape $N\times2$, contains finite float32 values, stays within the configured radius, and two newly created generators with the same seed return identical points. If any check fails, inspect the shared $u$ draw and the axis passed to `torch.stack`; do not proceed to D02.

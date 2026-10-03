@@ -7,6 +7,7 @@ Read [DESIGN.md](DESIGN.md) for the equations, controls, and implementation cont
 ## Contents
 
 - [1. Set up the package](#1-set-up-the-package)
+- [1.1 View the equations](#11-view-the-equations)
 - [2. Inspect the planned comparison](#2-inspect-the-planned-comparison)
 - [3. Check the working infrastructure](#3-check-the-working-infrastructure)
 - [4. Implement the numerical exercises](#4-implement-the-numerical-exercises)
@@ -30,6 +31,16 @@ For exercise V02, install the optional plotting dependency:
 pip install --no-build-isolation -e './toy_experiment[plot]'
 ```
 
+### 1.1 View the equations
+
+In Cursor, open a Markdown file and run **Markdown: Open Preview to the Side** from the command palette. This selects the built-in preview. Its math setting, `markdown.math.enabled`, must be true. The installed Cursor math extension renders inline expressions between single dollar signs and displayed equations between double dollar signs using KaTeX; a separate preview extension can use a different parser or configuration.
+
+The documents use those dollar delimiters, named norm and brace commands, and `\cr` for matrix and aligned-equation row breaks. Code setting names remain in prose rather than inside equations. These choices avoid Markdown consuming backslashes or treating underscores in text labels as math syntax. GitHub supports dollar-delimited math, but uses MathJax and imposes its own command restrictions; support for a command in KaTeX alone does not establish support on GitHub. See the [GitHub math syntax](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions) and [KaTeX row separators](https://katex.org/docs/supported#environments).
+
+Cherry has separate `inlineMath` and `mathBlock` hooks. In a Cherry application using MathJax, load the renderer before creating the editor and supply it through `externals.MathJax`; enable both hooks. If MathJax also scans dollar-delimited text, its `tex.inlineMath` configuration must include single-dollar delimiters. These are application initialization options, not settings exposed by the installed Cherry IDE extension. The built-in Cursor preview provides a direct way to read these files while diagnosing a Cherry preview failure. See [Cherry configuration](https://github.com/Tencent/cherry-markdown/blob/main/packages/cherry-markdown/src/Cherry.config.js) and [MathJax inline delimiters](https://docs.mathjax.org/en/latest/input/tex/delimiters.html).
+
+Native equation rendering depends on the viewer and its configuration. For a distribution that must look the same in viewers without math support, use a PDF or pre-rendered equation images. Keep these Markdown files as the editable mathematical source.
+
 ## 2. Inspect the planned comparison
 
 For example, a clean-data run at observed dimension $D=8$ embeds two-coordinate samples into eight-coordinate vectors. The suite repeats that setting for noise and velocity prediction, then repeats the three targets at the other dimensions. This command prints all 12 configurations:
@@ -38,7 +49,7 @@ For example, a clean-data run at observed dimension $D=8$ embeds two-coordinate 
 jit-toy plan --config toy_experiment/configs/baseline.json --suite
 ```
 
-The JSON array goes to standard output; the validation log, including source path and line number, goes to standard error. The suite changes only `observed_dim` and `prediction`. It covers $D\in\{2,8,16,512\}$ and command values `x`, `eps`, and `v`. A successful plan establishes that the configurations are valid; it does not execute numerical code or create a run directory.
+The JSON array goes to standard output; the validation log, including source path and line number, goes to standard error. The suite changes only `observed_dim` and `prediction`. It covers $D\in\lbrace 2,8,16,512\rbrace$ and command values `x`, `eps`, and `v`. A successful plan establishes that the configurations are valid; it does not execute numerical code or create a run directory.
 
 To inspect the smaller smoke configuration, which is intended to check that the completed components connect, run:
 

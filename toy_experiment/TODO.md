@@ -26,7 +26,7 @@ All numerical functions remain unfinished. The exercise identifiers below match 
 These exercises are in [data.py](src/jit_toy/data.py). The projection belongs to data construction and evaluation; each dataset item exposes only an observed vector.
 
 - [ ] **D01 — `sample_spiral`**: use one uniform draw per sample for both radius and angle, then stack the Cartesian coordinates. Check shape $N\times2$, float32 dtype, finite values, radial bounds, and identical output from fresh generators with the same seed. Plot the intrinsic points once to inspect the spiral.
-- [ ] **D02 — `make_projection`**: use the reduced QR decomposition of a Gaussian matrix; its orthonormal factor supplies $P$. Check $P^{\mathsf T}P\approx I_2$ at $D\in\{2,8,16,512\}$. On the same runtime, fresh generators with the same seed must produce the same matrix.
+- [ ] **D02 — `make_projection`**: use the reduced QR decomposition of a Gaussian matrix; its orthonormal factor supplies $P$. Check $P^{\mathsf T}P\approx I_2$ at $D\in\lbrace 2,8,16,512\rbrace$. On the same runtime, fresh generators with the same seed must produce the same matrix.
 - [ ] **D03 — `embed_points`**: multiply intrinsic rows by $P^{\mathsf T}$. Check shape $N\times D$ and preserved norms and pairwise distances. Do not rescale with $D$.
 - [ ] **D04 — `project_points`**: multiply observed rows by $P$. Check that projection after embedding recovers the original rows within float32 tolerance, including $N=1$.
 - [ ] **D05 — `ObservedDataset`**: store observed data and implement its length and integer indexing. Check that length is $N$, one item has $D$ coordinates, and an out-of-range index fails. Neither $P$ nor intrinsic coordinates may appear in an item.
