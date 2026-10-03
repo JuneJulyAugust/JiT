@@ -4,6 +4,8 @@ The package validates configurations and dispatches commands, but all numerical 
 
 Read [DESIGN.md](DESIGN.md) for the equations, controls, and implementation contracts. Use [TODO.md](TODO.md) to implement and check one exercise at a time.
 
+Open [explore_spiral.ipynb](explore_spiral.ipynb) for a runnable walkthrough of data, noise, model outputs, training updates, and generated trajectories. Its reference implementations are independent of the unfinished package exercises. Each step states its expected shapes and checks. Select the repository's `.venv` kernel in Cursor or VS Code and run the cells in order. From the repository root, install its dependencies with `python -m pip install -e './toy_experiment[notebook]'` in that same environment.
+
 ## Contents
 
 - [1. Set up the package](#1-set-up-the-package)
